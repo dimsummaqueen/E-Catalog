@@ -2600,6 +2600,15 @@
       ).join('')}</select></div>
       <div id="co-ojol" class="hidden-field"><div class="info-box">Silakan pesan kurir sendiri setelah pesanan dikonfirmasi oleh admin ya! 🛵</div></div>
       <div id="co-addr-wrap" class="hidden-field"><div class="form-group"><label class="form-label">Alamat Lengkap *</label><textarea id="co-addr" class="form-input" rows="3" placeholder="Jl. Contoh No. 1…"></textarea><p class="err-msg" id="e-addr"></p></div></div>
+      <div class="form-group" style="margin-top: 10px;">
+        <label class="form-label">📅 Hari & Tanggal Pengambilan:</label>
+        <input type="date" id="pickup-date" class="form-input" required>
+      </div>
+      
+      <div class="form-group" style="margin-top: 10px;">
+        <label class="form-label">⏰ Jam Pengambilan (WIB):</label>
+        <input type="time" id="pickup-time" class="form-input" required>
+      </div>
       <div class="form-group"><label class="form-label">Catatan (opsional)</label><textarea id="co-notes" class="form-input" rows="2" placeholder="Tidak pedas, extra saus, dll."></textarea></div>
     </div></div>
     <button class="btn-wa" id="btn-wa-send">
@@ -2656,6 +2665,21 @@
           /\D/g,
           ''
         );
+        // Tangkap nilai tanggal dan jam dari HTML
+const rawDate = document.getElementById('pickup-date').value;
+const timePickup = document.getElementById('pickup-time').value;
+
+// Ubah format tanggal menjadi bahasa Indonesia (Contoh: Selasa, 19 Mei 2026)
+let datePickup = "-";
+if (rawDate) {
+  const dateObj = new Date(rawDate);
+  datePickup = dateObj.toLocaleDateString('id-ID', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+}
         const method = document.getElementById('co-method')?.value || 'pickup';
         const addr = (document.getElementById('co-addr')?.value || '').trim();
         const notes = (document.getElementById('co-notes')?.value || '').trim();
@@ -2705,6 +2729,8 @@
             `▫️ *Nama:* ${name}`,
             `▫️ *WA.:* +62${wa}`, // ✅ SOLUSI NO. 1: Nomor WA Pemesan Tercantum Otomatis
             `▫️ *Pengambilan:* ${m?.s || method}`
+            `▫️ *Tanggal:* ${datePickup}`, // ✨ FITUR BARU: Tanggal Bahasa Indonesia
+            `▫️ *Jam:* ${timePickup || '-'}` // ✨ FITUR BARU: Waktu Pengambilan
           ];
   
           // Kondisi jika butuh alamat kirim
