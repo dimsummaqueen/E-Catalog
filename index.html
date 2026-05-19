@@ -2668,16 +2668,16 @@
         // Tangkap nilai tanggal dan jam dari HTML (DENGAN PENGAMAN)
         const rawDate = document.getElementById('pickup-date')?.value || '';
         const timePickup = document.getElementById('pickup-time')?.value || '';
-        
+
         // Ubah format tanggal menjadi bahasa Indonesia (Contoh: Selasa, 19 Mei 2026)
-        let datePickup = "-";
+        let datePickup = '-';
         if (rawDate) {
           const dateObj = new Date(rawDate);
-          datePickup = dateObj.toLocaleDateString('id-ID', { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
+          datePickup = dateObj.toLocaleDateString('id-ID', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
           });
         }
         const method = document.getElementById('co-method')?.value || 'pickup';
@@ -2715,46 +2715,50 @@
           })
           .join('\n');
 
-          // Konstruksi baris demi baris teks WhatsApp
-          let msgLines = [
-            `Halo ${storeName}! 🥟✨`,
-            `Saya mau order:`,
-            ``,
-            `🛒 *DETAIL PESANAN*`,
-            lines,
-            ``,
-            `💰 *Subtotal:* Rp ${fmt(sub())}`,
-            ``,
-            `👤 *DATA PEMESAN*`,
-            `▫️ *Nama:* ${name}`,
-            `▫️ *WA.:* +62${wa}`, // ✅ SOLUSI NO. 1: Nomor WA Pemesan Tercantum Otomatis
-            `▫️ *Pengambilan:* ${m?.s || method}`,
-            `▫️ *Tanggal:* ${datePickup}`, // ✨ FITUR BARU: Tanggal Bahasa Indonesia
-            `▫️ *Jam:* ${timePickup || '-'}` // ✨ FITUR BARU: Waktu Pengambilan
-          ];
-  
-          // Kondisi jika butuh alamat kirim
-          if (m?.addr) {
-            msgLines.push(`▫️ *Alamat Kirim:* ${addr}`);
-          }
-  
-          msgLines.push(`▫️ *Catatan:* ${notes || '-'}`);
-          msgLines.push(``);
-  
-          if (m?.v === 'ojol') {
-            msgLines.push(`⚠️ Saya akan pesan kurir sendiri setelah pesanan dikonfirmasi.\n`);
-          }
-          msgLines.push(`Tolong dibantu cek ketersediaannya ya Kak. Terima kasih! 🙏`); 
-          
-          msgLines.push(``);
+        // Konstruksi baris demi baris teks WhatsApp
+        let msgLines = [
+          `Halo ${storeName}! 🥟✨`,
+          `Saya mau order:`,
+          ``,
+          `🛒 *DETAIL PESANAN*`,
+          lines,
+          ``,
+          `💰 *Subtotal:* Rp ${fmt(sub())}`,
+          ``,
+          `👤 *DATA PEMESAN*`,
+          `▫️ *Nama:* ${name}`,
+          `▫️ *WA.:* +62${wa}`, // ✅ SOLUSI NO. 1: Nomor WA Pemesan Tercantum Otomatis
+          `▫️ *Pengambilan:* ${m?.s || method}`, // ✅ FIX: Koma yang hilang
+          `▫️ *Tanggal:* ${datePickup}`, // ✨ FITUR BARU: Tanggal Bahasa Indonesia
+          `▫️ *Jam:* ${timePickup || '-'}`, // ✨ FITUR BARU: Waktu Pengambilan
+        ];
 
-          // ✅ SOLUSI NO. 2: Koneksi Link Google Maps Masuk ke dalam Chat Owner
-          if ((method === 'pickup' || method === 'ojol') && settings.gmaps_url) {
-            msgLines.push(`*📍 Maps Lokasi Toko:* ${settings.gmaps_url}`);
-          }
-  
-          // Gabungkan seluruh baris pesan
-          const msg = msgLines.join('\n');
+        // Kondisi jika butuh alamat kirim
+        if (m?.addr) {
+          msgLines.push(`▫️ *Alamat Kirim:* ${addr}`);
+        }
+
+        msgLines.push(`▫️ *Catatan:* ${notes || '-'}`);
+        msgLines.push(``);
+
+        if (m?.v === 'ojol') {
+          msgLines.push(
+            `⚠️ Saya akan pesan kurir sendiri setelah pesanan dikonfirmasi.\n`
+          );
+        }
+        msgLines.push(
+          `Tolong dibantu cek ketersediaannya ya Kak. Terima kasih! 🙏`
+        );
+
+        msgLines.push(``);
+
+        // ✅ SOLUSI NO. 2: Koneksi Link Google Maps Masuk ke dalam Chat Owner
+        if ((method === 'pickup' || method === 'ojol') && settings.gmaps_url) {
+          msgLines.push(`*📍 Maps Lokasi Toko:* ${settings.gmaps_url}`);
+        }
+
+        // Gabungkan seluruh baris pesan
+        const msg = msgLines.join('\n');
 
         const cleanWA = (settings.wa_number || '81234567890').replace(
           /^0|^62/,
@@ -2799,7 +2803,9 @@
       )}" placeholder="81234567890"></div></div>
       <div class="form-group">
         <label class="form-label">Link Google Maps Toko (Untuk Pickup/Ojol)</label>
-        <input id="st-gmaps" class="form-input" type="text" value="${esc(settings.gmaps_url || '')}" placeholder="Contoh: https://maps.app.goo.gl/xxxxxx">
+        <input id="st-gmaps" class="form-input" type="text" value="${esc(
+          settings.gmaps_url || ''
+        )}" placeholder="Contoh: https://maps.app.goo.gl/xxxxxx">
       </div>
       <div class="form-group"><label class="form-label">Password Admin *</label><input id="st-pw" class="form-input" type="text" value="${esc(
         settings.admin_pw
