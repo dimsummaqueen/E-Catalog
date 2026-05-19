@@ -2665,21 +2665,21 @@
           /\D/g,
           ''
         );
-        // Tangkap nilai tanggal dan jam dari HTML
-const rawDate = document.getElementById('pickup-date').value;
-const timePickup = document.getElementById('pickup-time').value;
-
-// Ubah format tanggal menjadi bahasa Indonesia (Contoh: Selasa, 19 Mei 2026)
-let datePickup = "-";
-if (rawDate) {
-  const dateObj = new Date(rawDate);
-  datePickup = dateObj.toLocaleDateString('id-ID', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
-}
+        // Tangkap nilai tanggal dan jam dari HTML (DENGAN PENGAMAN)
+        const rawDate = document.getElementById('pickup-date')?.value || '';
+        const timePickup = document.getElementById('pickup-time')?.value || '';
+        
+        // Ubah format tanggal menjadi bahasa Indonesia (Contoh: Selasa, 19 Mei 2026)
+        let datePickup = "-";
+        if (rawDate) {
+          const dateObj = new Date(rawDate);
+          datePickup = dateObj.toLocaleDateString('id-ID', { 
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          });
+        }
         const method = document.getElementById('co-method')?.value || 'pickup';
         const addr = (document.getElementById('co-addr')?.value || '').trim();
         const notes = (document.getElementById('co-notes')?.value || '').trim();
