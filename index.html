@@ -2136,7 +2136,17 @@
         logo_url: '',
         wa_number: '81234567890',
         admin_pw: 'admin123',
-        gmaps_url: '', // ✨ Tambahkan baris baru ini
+        gmaps_url: '',
+        toko_lat: '-6.8402',
+        toko_lon: '106.7725',
+        tarif_per_km: '5000',
+        min_order_amount: '50000',
+        min_order_items: '2',
+        qris_image_url: '',
+        qris_max_amount: '300000',
+        bank1_name: '', bank1_number: '', bank1_owner: '',
+        bank2_name: '', bank2_number: '', bank2_owner: '',
+        bank3_name: '', bank3_number: '', bank3_owner: '',
       };
       let categories = [];
       let products = [];
@@ -2254,7 +2264,10 @@
         editingId = null,
         editingCatId = null,
         prodImgData = '',
-        logoImgData = '';
+        logoImgData = '',
+        qrisImgData = '',
+        metodeBayarDipilih = '',
+        savedFormData = {};
 
       const fmt = (n) => new Intl.NumberFormat('id-ID').format(n);
       const uid = () =>
@@ -2564,58 +2577,76 @@
       function openCheckout() {
         const ids = Object.keys(cart).filter((k) => cart[k] > 0);
         if (!ids.length) return;
-        const rows = ids
-          .map((k) => {
+
+        // Hitung total item & subtotal untuk cek minimal order delivery
+        const totalItems = Object.values(cart).reduce((s, v) => s + v, 0);
+        const totalAmount = sub();
+        const minAmount = parseInt(settings.min_order_amount || '50000');
+        const minItems = parseInt(settings.min_order_items || '2');
+        // Delivery tersedia jika salah satu syarat terpenuhi
+        const deliveryOk = totalAmount >= minAmount || totalItems >= minItems;
+
+        const rows = ids.map((k) => {
             const p = products.find((x) => x.id === k),
-              price = ep(p),
-              img = p.image_url || '';
+              price = ep(p), img = p.image_url || '';
             return `<div class="order-item">
-      <div class="order-thumb">${
-        img ? `<img src="${img}" alt="">` : ''
-      }<span style="${img ? 'display:none' : ''}">${emojiFor(p.id)}</span></div>
-      <div class="order-info"><p class="order-name">${esc(
-        p.name
-      )}</p><p class="order-var">${esc(
-              p.variant
-            )}</p><p class="order-price" id="cop-${k}">Rp ${fmt(
-              price * cart[k]
-            )}</p></div>
-      <div class="order-qty"><button class="oqbtn minus" onclick="coRm('${k}')">−</button><span class="oqnum" id="coq-${k}">${
-              cart[k]
-            }</span><button class="oqbtn plus" onclick="coAdd('${k}')">+</button></div>
+      <div class="order-thumb">${img ? `<img src="${img}" alt="">` : ''}<span style="${img ? 'display:none' : ''}">${emojiFor(p.id)}</span></div>
+      <div class="order-info"><p class="order-name">${esc(p.name)}</p><p class="order-var">${esc(p.variant)}</p><p class="order-price" id="cop-${k}">Rp ${fmt(price * cart[k])}</p></div>
+      <div class="order-qty"><button class="oqbtn minus" onclick="coRm('${k}')">−</button><span class="oqnum" id="coq-${k}">${cart[k]}</span><button class="oqbtn plus" onclick="coAdd('${k}')">+</button></div>
     </div>`;
-          })
-          .join('');
+          }).join('');
+
+        // Buat opsi metode pengambilan - disable delivery jika tidak memenuhi syarat
+        const methodOptions = DELIVERY_METHODS.map((d) => {
+          if (d.v === 'delivery' && !deliveryOk) {
+            return `<option value="${d.v}" disabled>${d.l} (Min. Rp ${fmt(minAmount)} atau ${minItems} item)</option>`;
+          }
+          return `<option value="${d.v}">${d.l}</option>`;
+        }).join('');
 
         document.getElementById('sheet-body').innerHTML = `
     <div><p class="sec-label">Detail Pesanan</p><div class="order-card">${rows}</div>
-    <div class="subtotal-row"><span class="subtotal-label">Subtotal</span><span class="subtotal-val" id="co-sub">Rp ${fmt(
-      sub()
-    )}</span></div></div>
+    <div class="subtotal-row"><span class="subtotal-label">Subtotal</span><span class="subtotal-val" id="co-sub">Rp ${fmt(sub())}</span></div></div>
+    ${!deliveryOk ? `<div class="info-box" style="margin:0 0 4px;background:#fff8e1;border-color:#ffe082;color:#7c5c00">
+      ⚠️ <b>Delivery</b> tersedia jika subtotal ≥ Rp ${fmt(minAmount)} atau minimal ${minItems} item.
+    </div>` : ''}
     <div><p class="sec-label">Data Pemesan</p><div class="form-section">
       <div class="form-group"><label class="form-label">Nama Lengkap *</label><input id="co-name" class="form-input" type="text" placeholder="Contoh: Budi Santoso" autocomplete="name"><p class="err-msg" id="e-name"></p></div>
       <div class="form-group"><label class="form-label">Nomor WhatsApp *</label><div class="wa-row"><span class="wa-prefix">+62</span><input id="co-wa" class="form-input" type="tel" inputmode="numeric" placeholder="81234567890" style="flex:1"></div><p class="err-msg" id="e-wa"></p></div>
-      <div class="form-group"><label class="form-label">Metode Pengambilan *</label><select id="co-method" class="form-input form-select" onchange="onDel(this.value)">${DELIVERY_METHODS.map(
-        (d) => `<option value="${d.v}">${d.l}</option>`
-      ).join('')}</select></div>
+      <div class="form-group"><label class="form-label">Metode Pengambilan *</label><select id="co-method" class="form-input form-select" onchange="onDel(this.value)">${methodOptions}</select></div>
       <div id="co-ojol" class="hidden-field"><div class="info-box">Silakan pesan kurir sendiri setelah pesanan dikonfirmasi oleh admin ya! 🛵</div></div>
-      <div id="co-addr-wrap" class="hidden-field"><div class="form-group"><label class="form-label">Alamat Lengkap *</label><textarea id="co-addr" class="form-input" rows="3" placeholder="Jl. Contoh No. 1…"></textarea><p class="err-msg" id="e-addr"></p></div></div>
+      <div id="co-addr-wrap" class="hidden-field">
+      <div class="form-group" style="margin-bottom: 8px;">
+        <label class="form-label">Alamat Lengkap *</label>
+        <textarea id="co-addr" class="form-input" rows="3" placeholder="Jl. Contoh No. 1…"></textarea>
+        <p class="err-msg" id="e-addr"></p>
+      </div>
+      <div id="kotak-ongkir" style="margin-bottom: 5px; background-color: #fafafa; border: 1px solid #e5e5e5; padding: 12px; border-radius: 8px;">
+        <label class="form-label" style="font-weight: bold; margin-bottom: 8px; display: block;">📍 Hitung Ongkir Otomatis</label>
+        <button type="button" id="btn-cek-ongkir" onclick="jalankanRadarGPS()" style="width: 100%; padding: 10px; background-color: #333; color: white; border: none; border-radius: 6px; cursor: pointer; margin-bottom: 8px;">
+          Deteksi Jarak & Hitung Ongkir
+        </button>
+        <small id="info-jarak" style="color: #666; display: block; margin-bottom: 8px; font-size: 0.85em; line-height: 1.3;">Klik tombol untuk mendeteksi jarak via satelit GPS.</small>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ccc;">
+          <span style="font-size: 0.95em; color: #333;">Biaya Ongkir:</span>
+          <strong id="tampil-ongkir" style="color: #d35400; font-size: 1.1em;">Rp 0</strong>
+        </div>
+      </div>
+    </div>
       <div class="form-group" style="margin-top: 10px;">
         <label class="form-label">📅 Hari & Tanggal Pengambilan:</label>
         <input type="date" id="pickup-date" class="form-input" required>
       </div>
-      
       <div class="form-group" style="margin-top: 10px;">
         <label class="form-label">⏰ Jam Pengambilan (WIB):</label>
         <input type="time" id="pickup-time" class="form-input" required>
       </div>
       <div class="form-group"><label class="form-label">Catatan (opsional)</label><textarea id="co-notes" class="form-input" rows="2" placeholder="Tidak pedas, extra saus, dll."></textarea></div>
     </div></div>
-    <button class="btn-wa" id="btn-wa-send">
-      <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>
-      Pesan via WhatsApp
+    <button class="btn-wa" id="btn-lanjut-bayar" style="background:var(--red)">
+      Lanjut ke Pembayaran →
     </button>`;
-        document.getElementById('btn-wa-send').onclick = sendOrder;
+        document.getElementById('btn-lanjut-bayar').onclick = bukaStepPembayaran;
         openSheet('checkout-sheet', 'backdrop');
       }
 
@@ -2652,57 +2683,58 @@
       }
       function onDel(v) {
         const m = DELIVERY_METHODS.find((d) => d.v === v);
-        document.getElementById('co-ojol').className = m.ojol
-          ? ''
-          : 'hidden-field';
-        document.getElementById('co-addr-wrap').className = m.addr
-          ? ''
-          : 'hidden-field';
-      }
-      function sendOrder() {
-        const name = (document.getElementById('co-name')?.value || '').trim();
-        const wa = (document.getElementById('co-wa')?.value || '').replace(
-          /\D/g,
-          ''
-        );
-        // Tangkap nilai tanggal dan jam dari HTML (DENGAN PENGAMAN)
-        const rawDate = document.getElementById('pickup-date')?.value || '';
-        const timePickup = document.getElementById('pickup-time')?.value || '';
+        document.getElementById('co-ojol').className = m.ojol ? '' : 'hidden-field';
+        document.getElementById('co-addr-wrap').className = m.addr ? '' : 'hidden-field';
 
-        // Ubah format tanggal menjadi bahasa Indonesia (Contoh: Selasa, 19 Mei 2026)
+        // Reset ongkir saat bukan delivery
+        if (v !== 'delivery') {
+          ongkirOtomatis = 0;
+          jarakOtomatis = 0;
+          const tampilOngkir = document.getElementById('tampil-ongkir');
+          if (tampilOngkir) tampilOngkir.innerText = 'Rp 0';
+          const infoJarak = document.getElementById('info-jarak');
+          if (infoJarak) {
+            infoJarak.innerHTML = 'Klik tombol untuk mendeteksi jarak via satelit GPS.';
+            infoJarak.style.color = '#666';
+          }
+          const btnCek = document.getElementById('btn-cek-ongkir');
+          if (btnCek) { btnCek.textContent = 'Deteksi Jarak & Hitung Ongkir'; btnCek.disabled = false; }
+        }
+      }
+
+      function sendOrder() {
+        // Baca data dari savedFormData (disimpan saat pindah ke step 2)
+        const name     = savedFormData.name     || '';
+        const wa       = savedFormData.wa       || '';
+        const method   = savedFormData.method   || 'pickup';
+        const addr     = savedFormData.addr     || '';
+        const notes    = savedFormData.notes    || '';
+        const rawDate  = savedFormData.rawDate  || '';
+        const timePickup = savedFormData.timePickup || '';
+
+        // Validasi dasar (sebagai pengaman)
+        if (!name || !wa || wa.length < 8) {
+          alert('Data pemesan tidak lengkap. Silakan kembali ke langkah 1.');
+          return;
+        }
+
+        // Format tanggal ke bahasa Indonesia
         let datePickup = '-';
         if (rawDate) {
           const dateObj = new Date(rawDate);
           datePickup = dateObj.toLocaleDateString('id-ID', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
           });
         }
-        const method = document.getElementById('co-method')?.value || 'pickup';
-        const addr = (document.getElementById('co-addr')?.value || '').trim();
-        const notes = (document.getElementById('co-notes')?.value || '').trim();
+
         const m = DELIVERY_METHODS.find((d) => d.v === method);
-        let ok = true;
-        ['e-name', 'e-wa', 'e-addr'].forEach((x) => {
-          const e = document.getElementById(x);
-          if (e) e.textContent = '';
-        });
-        if (!name) {
-          document.getElementById('e-name').textContent = 'Nama wajib diisi.';
-          ok = false;
-        }
-        if (!wa || wa.length < 8) {
-          document.getElementById('e-wa').textContent = 'Nomor tidak valid.';
-          ok = false;
-        }
-        if (m?.addr && !addr) {
-          const e = document.getElementById('e-addr');
-          if (e) e.textContent = 'Alamat wajib diisi.';
-          ok = false;
-        }
-        if (!ok) return;
+
+        // Ambil status bayar dari toggle step 2
+        const sudahBayar = document.getElementById('toggle-bayar')?.checked || false;
+        const statusBayar = sudahBayar ? '✅ SUDAH BAYAR' : '⏳ BELUM BAYAR';
+        const labelMetodeBayar = metodeBayarDipilih === 'qris' ? 'QRIS'
+          : metodeBayarDipilih === 'transfer' ? 'Transfer Bank'
+          : '-';
 
         const storeName = settings.main_title || 'Toko Kami';
         const lines = Object.keys(cart)
@@ -2720,41 +2752,65 @@
           `Halo ${storeName}! 🥟✨`,
           `Saya mau order:`,
           ``,
-          `🛒 *DETAIL PESANAN*`,
-          lines,
-          ``,
-          `💰 *Subtotal:* Rp ${fmt(sub())}`,
-          ``,
+          `━━━━━━━━━━━━━━━━━━`,
           `👤 *DATA PEMESAN*`,
-          `▫️ *Nama:* ${name}`,
-          `▫️ *WA.:* +62${wa}`, // ✅ SOLUSI NO. 1: Nomor WA Pemesan Tercantum Otomatis
-          `▫️ *Pengambilan:* ${m?.s || method}`, // ✅ FIX: Koma yang hilang
-          `▫️ *Tanggal:* ${datePickup}`, // ✨ FITUR BARU: Tanggal Bahasa Indonesia
-          `▫️ *Jam:* ${timePickup || '-'}`, // ✨ FITUR BARU: Waktu Pengambilan
+          `━━━━━━━━━━━━━━━━━━`,
+          `👤 *Nama:* ${name}`,
+          `📱 *WA:* +62${wa}`,
+          `🚚 *Pengambilan:* ${m?.s || method}`,
+          `📅 *Tanggal:* ${datePickup}`,
+          `⏰ *Jam:* ${timePickup ? timePickup + ' WIB' : '-'}`,
         ];
 
         // Kondisi jika butuh alamat kirim
         if (m?.addr) {
-          msgLines.push(`▫️ *Alamat Kirim:* ${addr}`);
+          msgLines.push(`📍 *Alamat Kirim:* ${addr}`);
         }
 
-        msgLines.push(`▫️ *Catatan:* ${notes || '-'}`);
-        msgLines.push(``);
-
+        // Peringatan ojol — posisi di blok data pemesan
         if (m?.v === 'ojol') {
-          msgLines.push(
-            `⚠️ Saya akan pesan kurir sendiri setelah pesanan dikonfirmasi.\n`
-          );
+          msgLines.push(``);
+          msgLines.push(`⚠️ *Saya akan pesan kurir sendiri setelah pesanan dikonfirmasi.*`);
         }
-        msgLines.push(
-          `Tolong dibantu cek ketersediaannya ya Kak. Terima kasih! 🙏`
-        );
 
+        msgLines.push(`📝 *Catatan:* ${notes || '-'}`);
+
+        // Blok detail pesanan
+        msgLines.push(``);
+        msgLines.push(`🛒 *DETAIL PESANAN*`);
+        msgLines.push(lines);
         msgLines.push(``);
 
-        // ✅ SOLUSI NO. 2: Koneksi Link Google Maps Masuk ke dalam Chat Owner
+        // Blok pembayaran + rincian biaya — digabung jadi 1 blok
+        msgLines.push(`━━━━━━━━━━━━━━━━━━`);
+        msgLines.push(`💳 *Metode Bayar:* ${labelMetodeBayar}`);
+        msgLines.push(`${statusBayar}`);
+        if (!sudahBayar) {
+          msgLines.push(`📎 Bukti pembayaran akan segera dikirim.`);
+        }
+
+        // Rincian biaya delivery — dalam blok yang sama, pisah dengan garis tipis
+        if (m?.v === 'delivery' && ongkirOtomatis > 0) {
+          msgLines.push(`──────────────────`);
+          msgLines.push(`💰 *Subtotal Produk :* Rp ${fmt(sub())}`);
+          msgLines.push(`💸 *Ongkir (${jarakOtomatis.toFixed(1)} km) :* Rp ${fmt(ongkirOtomatis)}`);
+          msgLines.push(`💵 *TOTAL BAYAR     :* Rp ${fmt(sub() + ongkirOtomatis)}`);
+        } else {
+          msgLines.push(`──────────────────`);
+          msgLines.push(`💰 *Total Bayar:* Rp ${fmt(sub())}`);
+        }
+        msgLines.push(`━━━━━━━━━━━━━━━━━━`);
+
+        msgLines.push(``);
+        msgLines.push(`Tolong dibantu cek ketersediaannya ya Kak. Terima kasih! 🙏`);
+
+        // Blok GMaps — khusus pickup & ojol
         if ((method === 'pickup' || method === 'ojol') && settings.gmaps_url) {
-          msgLines.push(`*📍 Maps Lokasi Toko:* ${settings.gmaps_url}`);
+          msgLines.push(``);
+          msgLines.push(`━━━━━━━━━━━━━━━━━━`);
+          msgLines.push(`📍 *Lokasi Toko:*`);
+          msgLines.push(settings.gmaps_url);
+          msgLines.push(`━━━━━━━━━━━━━━━━━━`);
         }
 
         // Gabungkan seluruh baris pesan
@@ -2773,6 +2829,194 @@
         closeSheet('checkout-sheet', 'backdrop');
         renderCatalog(document.getElementById('search-input').value);
         updateCartBar();
+      }
+
+      /* ═══════════════════════════════════════════════════
+   PAYMENT STEP 2
+═══════════════════════════════════════════════════ */
+      // Library logo bank otomatis berdasarkan nama
+      function logoBank(nama) {
+        const n = (nama || '').toLowerCase().trim();
+        const map = {
+          'bca':       { logo: '🏦', warna: '#005BAC', teks: 'white' },
+          'bri':       { logo: '🏦', warna: '#00529B', teks: 'white' },
+          'bni':       { logo: '🏦', warna: '#FF6600', teks: 'white' },
+          'mandiri':   { logo: '🏦', warna: '#003087', teks: 'white' },
+          'bsi':       { logo: '🏦', warna: '#4CAF50', teks: 'white' },
+          'seabank':   { logo: '🏦', warna: '#2196F3', teks: 'white' },
+          'dana':      { logo: '💙', warna: '#118EEA', teks: 'white' },
+          'gopay':     { logo: '💚', warna: '#00AED6', teks: 'white' },
+          'ovo':       { logo: '💜', warna: '#4C3494', teks: 'white' },
+          'shopeepay': { logo: '🧡', warna: '#EE4D2D', teks: 'white' },
+        };
+        // Cari match dari nama
+        for (const key of Object.keys(map)) {
+          if (n.includes(key)) return map[key];
+        }
+        return { logo: '🏦', warna: '#555', teks: 'white' };
+      }
+
+      function bukaStepPembayaran() {
+        // Validasi form step 1 dulu
+        const name = (document.getElementById('co-name')?.value || '').trim();
+        const wa = (document.getElementById('co-wa')?.value || '').replace(/\D/g, '');
+        const method = document.getElementById('co-method')?.value || 'pickup';
+        const addr = (document.getElementById('co-addr')?.value || '').trim();
+        const notes = (document.getElementById('co-notes')?.value || '').trim();
+        const rawDate = document.getElementById('pickup-date')?.value || '';
+        const timePickup = document.getElementById('pickup-time')?.value || '';
+        const m = DELIVERY_METHODS.find((d) => d.v === method);
+        let ok = true;
+        ['e-name','e-wa','e-addr'].forEach(x => { const e = document.getElementById(x); if(e) e.textContent = ''; });
+        if (!name) { document.getElementById('e-name').textContent = 'Nama wajib diisi.'; ok = false; }
+        if (!wa || wa.length < 8) { document.getElementById('e-wa').textContent = 'Nomor tidak valid.'; ok = false; }
+        if (m?.addr && !addr) { const e = document.getElementById('e-addr'); if(e) e.textContent = 'Alamat wajib diisi.'; ok = false; }
+        if (!ok) return;
+
+        // ✅ Simpan data form ke variabel global sebelum konten diganti
+        savedFormData = { name, wa, method, addr, notes, rawDate, timePickup };
+
+        // Reset metode bayar
+        metodeBayarDipilih = '';
+
+        // Hitung total bayar
+        const totalBayar = sub() + (ongkirOtomatis || 0);
+        const qrisMax = parseInt(settings.qris_max_amount || '300000');
+        const qrisOk = totalBayar <= qrisMax;
+
+        // Buat kartu rekening bank
+        const banks = [1,2,3].map(i => {
+          const nm = settings[`bank${i}_name`] || '';
+          const no = settings[`bank${i}_number`] || '';
+          const own = settings[`bank${i}_owner`] || '';
+          if (!nm || !no) return '';
+          const lb = logoBank(nm);
+          return `<div style="background:${lb.warna};color:${lb.teks};border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:opacity .15s" onclick="pilihMetodeBayar('transfer')" id="bank-card-${i}">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <span style="font-size:20px">${lb.logo}</span>
+              <span style="font-weight:800;font-size:14px">${esc(nm)}</span>
+            </div>
+            <div style="font-size:15px;font-weight:700;letter-spacing:1px">${esc(no)}</div>
+            <div style="font-size:11px;opacity:0.85;margin-top:2px">a.n. ${esc(own)}</div>
+          </div>`;
+        }).join('');
+
+        const adaBankAktif = [1,2,3].some(i => settings[`bank${i}_name`] && settings[`bank${i}_number`]);
+
+        document.getElementById('sheet-body').innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+          <button onclick="kembaliStep1()" style="background:#f0ebe0;border:none;border-radius:50%;width:34px;height:34px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">←</button>
+          <p class="sec-label" style="margin:0">Langkah 2 dari 2 — Pembayaran</p>
+        </div>
+
+        <div style="background:#f8f4ee;border-radius:14px;padding:12px 14px;margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;font-size:13px;color:#666;margin-bottom:4px">
+            <span>Subtotal Produk</span><span>Rp ${fmt(sub())}</span>
+          </div>
+          ${ongkirOtomatis > 0 ? `<div style="display:flex;justify-content:space-between;font-size:13px;color:#666;margin-bottom:4px">
+            <span>Ongkir (${jarakOtomatis.toFixed(1)} km)</span><span>Rp ${fmt(ongkirOtomatis)}</span>
+          </div>` : ''}
+          <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:800;color:var(--red);border-top:1px dashed #ddd;padding-top:8px;margin-top:4px">
+            <span>Total Bayar</span><span>Rp ${fmt(totalBayar)}</span>
+          </div>
+        </div>
+
+        <p class="sec-label">Pilih Metode Pembayaran</p>
+
+        ${settings.qris_image_url ? `
+        <div id="qris-card" onclick="pilihMetodeBayar('qris')" style="border:2px solid ${qrisOk ? '#e0d8ce' : '#eee'};border-radius:14px;padding:12px 14px;margin-bottom:10px;cursor:${qrisOk ? 'pointer' : 'not-allowed'};opacity:${qrisOk ? '1' : '0.5'};transition:border .2s">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:24px">📱</span>
+            <div>
+              <div style="font-weight:800;font-size:14px">QRIS</div>
+              <div style="font-size:11px;color:#aaa">${qrisOk ? 'Scan QR untuk bayar' : `Tidak tersedia — maks. Rp ${fmt(qrisMax)}`}</div>
+            </div>
+            <span id="check-qris" style="margin-left:auto;font-size:20px"></span>
+          </div>
+          ${qrisOk ? `<div id="qris-img-wrap" style="display:none;text-align:center;margin-top:10px">
+            <img src="${settings.qris_image_url}" style="max-width:220px;border-radius:10px;border:1px solid #eee" alt="QRIS">
+          </div>` : ''}
+        </div>` : ''}
+
+        ${adaBankAktif ? `
+        <div id="transfer-card" onclick="pilihMetodeBayar('transfer')" style="border:2px solid #e0d8ce;border-radius:14px;padding:12px 14px;margin-bottom:10px;cursor:pointer;transition:border .2s">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:24px">🏦</span>
+            <div>
+              <div style="font-weight:800;font-size:14px">Transfer Bank</div>
+              <div style="font-size:11px;color:#aaa">Transfer ke rekening toko</div>
+            </div>
+            <span id="check-transfer" style="margin-left:auto;font-size:20px"></span>
+          </div>
+          <div id="bank-list-wrap" style="display:none;margin-top:10px">${banks}</div>
+        </div>` : ''}
+
+        ${!settings.qris_image_url && !adaBankAktif ? `
+        <div class="info-box" style="background:#fff8e1;border-color:#ffe082;color:#7c5c00">
+          ⚠️ Belum ada metode pembayaran yang diatur. Hubungi admin.
+        </div>` : ''}
+
+        <div style="background:#f8f4ee;border-radius:14px;padding:14px;margin-top:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div>
+              <p style="font-size:14px;font-weight:700;color:var(--dark)">Saya sudah melakukan pembayaran</p>
+              <p style="font-size:11px;color:#aaa;margin-top:2px">Aktifkan setelah transfer/scan QRIS</p>
+            </div>
+            <label class="toggle-wrap"><input type="checkbox" id="toggle-bayar"><span class="toggle-slider"></span></label>
+          </div>
+          <div style="font-size:11px;color:#888;line-height:1.6;border-top:1px dashed #ddd;padding-top:8px">
+            📎 <b>Sertakan bukti pembayaran</b> saat mengirim konfirmasi ke WhatsApp admin.
+          </div>
+        </div>
+
+        <button class="btn-wa" id="btn-wa-send" style="margin-top:12px">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>
+          Kirim Konfirmasi ke WhatsApp
+        </button>`;
+        document.getElementById('btn-wa-send').onclick = sendOrder;
+      }
+
+      function pilihMetodeBayar(tipe) {
+        metodeBayarDipilih = tipe;
+        // Reset semua border
+        ['qris-card','transfer-card'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.style.border = '2px solid #e0d8ce';
+        });
+        ['check-qris','check-transfer'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.textContent = '';
+        });
+        // Sembunyikan semua sub-konten
+        const qrisWrap = document.getElementById('qris-img-wrap');
+        const bankWrap = document.getElementById('bank-list-wrap');
+        if (qrisWrap) qrisWrap.style.display = 'none';
+        if (bankWrap) bankWrap.style.display = 'none';
+
+        // Aktifkan yang dipilih
+        const card = document.getElementById(tipe + '-card');
+        const check = document.getElementById('check-' + tipe);
+        if (card) card.style.border = '2px solid var(--red)';
+        if (check) check.textContent = '✅';
+        if (tipe === 'qris' && qrisWrap) qrisWrap.style.display = 'block';
+        if (tipe === 'transfer' && bankWrap) bankWrap.style.display = 'block';
+      }
+
+      function kembaliStep1() {
+        // Simpan data form sementara agar tidak hilang
+        const savedName = document.getElementById('co-name')?.value || '';
+        const savedWa = document.getElementById('co-wa')?.value || '';
+        const savedMethod = document.getElementById('co-method')?.value || 'pickup';
+        openCheckout();
+        // Restore data form
+        setTimeout(() => {
+          if (document.getElementById('co-name')) document.getElementById('co-name').value = savedName;
+          if (document.getElementById('co-wa')) document.getElementById('co-wa').value = savedWa;
+          if (document.getElementById('co-method')) {
+            document.getElementById('co-method').value = savedMethod;
+            onDel(savedMethod);
+          }
+        }, 50);
       }
 
       /* ═══════════════════════════════════════════════════
@@ -2810,6 +3054,72 @@
       <div class="form-group"><label class="form-label">Password Admin *</label><input id="st-pw" class="form-input" type="text" value="${esc(
         settings.admin_pw
       )}"></div>
+    </div>
+  </div>
+  <div class="admin-section"><p class="admin-section-title"><span>🚚</span> Pengaturan Ongkir</p>
+    <div class="form-section">
+      <p style="font-size:11px;color:#aaa;margin-bottom:8px;line-height:1.6">Koordinat digunakan sebagai titik asal perhitungan jarak ke lokasi pelanggan. Dapatkan koordinat dari Google Maps → klik kanan lokasi toko → salin angka.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label class="form-label">Latitude Toko *</label>
+          <input id="st-lat" class="form-input" type="text" value="${esc(settings.toko_lat || '-6.8402')}" placeholder="Contoh: -6.8402">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Longitude Toko *</label>
+          <input id="st-lon" class="form-input" type="text" value="${esc(settings.toko_lon || '106.7725')}" placeholder="Contoh: 106.7725">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tarif Ongkir per KM (Rp) *</label>
+        <input id="st-tarif" class="form-input" type="number" value="${esc(settings.tarif_per_km || '5000')}" placeholder="Contoh: 5000">
+        <p style="font-size:10px;color:#aaa;margin-top:4px">Tarif minimum Rp 5.000 (1 km pertama). Contoh: isi 5000 = Rp 5.000/km</p>
+      </div>
+    </div>
+  </div>
+  <div class="admin-section"><p class="admin-section-title"><span>🛒</span> Pengaturan Minimal Order Delivery</p>
+    <div class="form-section">
+      <p style="font-size:11px;color:#aaa;margin-bottom:8px;line-height:1.6">Delivery tersedia jika <b>salah satu</b> syarat terpenuhi (bukan keduanya).</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label class="form-label">Minimal Subtotal (Rp)</label>
+          <input id="st-min-amount" class="form-input" type="number" value="${esc(settings.min_order_amount || '50000')}" placeholder="50000">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Minimal Jumlah Item</label>
+          <input id="st-min-items" class="form-input" type="number" value="${esc(settings.min_order_items || '2')}" placeholder="2">
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="admin-section"><p class="admin-section-title"><span>💳</span> Pengaturan Pembayaran</p>
+    <div class="form-section">
+      <p class="admin-section-title" style="font-size:12px;margin-bottom:8px">📱 QRIS</p>
+      <div class="form-group">
+        <label class="form-label">Foto QRIS</label>${imgZoneHTML('st-qris', settings.qris_image_url || '', 'qris')}
+      </div>
+      <div class="form-group">
+        <label class="form-label">Batas Maksimal QRIS (Rp)</label>
+        <input id="st-qris-max" class="form-input" type="number" value="${esc(settings.qris_max_amount || '300000')}" placeholder="300000">
+        <p style="font-size:10px;color:#aaa;margin-top:4px">Di atas batas ini QRIS tidak akan ditampilkan ke customer.</p>
+      </div>
+      <p class="admin-section-title" style="font-size:12px;margin-top:16px;margin-bottom:8px">🏦 Rekening Bank (Maks. 3)</p>
+      <p style="font-size:11px;color:#aaa;margin-bottom:12px;line-height:1.6">Logo bank muncul otomatis. Nama bank yang didukung: BCA, BRI, BNI, Mandiri, BSI, SeaBank, DANA, GoPay, OVO, ShopeePay, atau nama lain.</p>
+      ${[1,2,3].map(i => `
+      <div style="background:#f8f4ee;border-radius:12px;padding:12px;margin-bottom:10px">
+        <p style="font-size:11px;font-weight:800;color:#aaa;letter-spacing:1px;margin-bottom:8px">REKENING ${i}</p>
+        <div class="form-group">
+          <label class="form-label">Nama Bank</label>
+          <input id="st-bank${i}-name" class="form-input" type="text" value="${esc(settings[`bank${i}_name`] || '')}" placeholder="Contoh: BCA / SeaBank / DANA">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nomor Rekening</label>
+          <input id="st-bank${i}-number" class="form-input" type="text" value="${esc(settings[`bank${i}_number`] || '')}" placeholder="Contoh: 1234567890">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nama Pemilik Rekening</label>
+          <input id="st-bank${i}-owner" class="form-input" type="text" value="${esc(settings[`bank${i}_owner`] || '')}" placeholder="Contoh: Budi Santoso">
+        </div>
+      </div>`).join('')}
     </div>
   </div>`;
 
@@ -2902,24 +3212,35 @@
       async function saveSettings_() {
         const title = (document.getElementById('st-title')?.value || '').trim();
         const sub2 = (document.getElementById('st-sub')?.value || '').trim();
-        const wa = (document.getElementById('st-wa')?.value || '').replace(
-          /\D/g,
-          ''
-        );
+        const wa = (document.getElementById('st-wa')?.value || '').replace(/\D/g, '');
         const pw = (document.getElementById('st-pw')?.value || '').trim();
         const gmaps = (document.getElementById('st-gmaps')?.value || '').trim();
+        const lat = (document.getElementById('st-lat')?.value || '').trim();
+        const lon = (document.getElementById('st-lon')?.value || '').trim();
+        const tarif = (document.getElementById('st-tarif')?.value || '').trim();
+        const minAmount = (document.getElementById('st-min-amount')?.value || '').trim();
+        const minItems = (document.getElementById('st-min-items')?.value || '').trim();
+        const qrisMax = (document.getElementById('st-qris-max')?.value || '').trim();
+
         if (!title || !wa || !pw) {
           alert('Pastikan Nama Toko, Nomor WA, dan Password sudah diisi.');
+          return;
+        }
+        if (!lat || !lon) {
+          alert('Latitude dan Longitude toko wajib diisi untuk fitur ongkir.');
           return;
         }
 
         // Upload logo kalau ada gambar baru
         if (logoImgData) {
-          try {
-            settings.logo_url = await uploadImage(logoImgData, 'logos');
-          } catch (e) {
-            console.error('Logo upload error:', e);
-          }
+          try { settings.logo_url = await uploadImage(logoImgData, 'logos'); }
+          catch (e) { console.error('Logo upload error:', e); }
+        }
+
+        // Upload foto QRIS kalau ada gambar baru
+        if (qrisImgData) {
+          try { settings.qris_image_url = await uploadImage(qrisImgData, 'qris'); }
+          catch (e) { console.error('QRIS upload error:', e); }
         }
 
         settings.main_title = title;
@@ -2927,11 +3248,24 @@
         settings.wa_number = wa;
         settings.admin_pw = pw;
         settings.gmaps_url = gmaps;
+        settings.toko_lat = lat;
+        settings.toko_lon = lon;
+        settings.tarif_per_km = tarif || '5000';
+        settings.min_order_amount = minAmount || '50000';
+        settings.min_order_items = minItems || '2';
+        settings.qris_max_amount = qrisMax || '300000';
+        // Rekening bank 1-3
+        for (let i = 1; i <= 3; i++) {
+          settings[`bank${i}_name`]   = (document.getElementById(`st-bank${i}-name`)?.value || '').trim();
+          settings[`bank${i}_number`] = (document.getElementById(`st-bank${i}-number`)?.value || '').trim();
+          settings[`bank${i}_owner`]  = (document.getElementById(`st-bank${i}-owner`)?.value || '').trim();
+        }
         try {
           await saveSettings();
           renderHero();
           alert('✅ Pengaturan berhasil disimpan!');
           logoImgData = '';
+          qrisImgData = '';
         } catch (e) {
           alert('Gagal simpan: ' + e.message);
         }
@@ -3318,6 +3652,7 @@
             if (fill) fill.style.width = '0';
           }, 1500);
           if (type === 'logo') logoImgData = result;
+          else if (type === 'qris') qrisImgData = result;
           else prodImgData = result;
           const prev = document.getElementById(zoneId + '-prev'),
             zone = document.getElementById(zoneId),
@@ -3339,6 +3674,7 @@
       function removeZoneImg(e, zoneId, type) {
         e.stopPropagation();
         if (type === 'logo') logoImgData = '';
+        else if (type === 'qris') qrisImgData = '';
         else prodImgData = '';
         const prev = document.getElementById(zoneId + '-prev'),
           zone = document.getElementById(zoneId),
@@ -3386,6 +3722,112 @@
         checkWelcome();
         if (sessionStorage.getItem('mq_auth') === '1') renderAdmin();
       });
+      // ==========================================
+      // MESIN RADAR GPS ONGKIR
+      // ==========================================
+
+      // Variabel global agar bisa ditambahkan ke Subtotal pesanan nanti
+      let ongkirOtomatis = 0;
+      let jarakOtomatis = 0;
+
+      // Rumus Haversine (Pendeteksi Radius)
+      function hitungJarakKm(lat1, lon1, lat2, lon2) {
+        const R = 6371;
+        const dLat = ((lat2 - lat1) * Math.PI) / 180;
+        const dLon = ((lon2 - lon1) * Math.PI) / 180;
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos((lat1 * Math.PI) / 180) *
+            Math.cos((lat2 * Math.PI) / 180) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+      }
+
+      // Fungsi utama GPS Ongkir
+      function jalankanRadarGPS() {
+        const infoJarak = document.getElementById('info-jarak');
+        const tampilOngkir = document.getElementById('tampil-ongkir');
+        const btnCek = document.getElementById('btn-cek-ongkir');
+
+        // Ambil koordinat & tarif dari settings (fleksibel, bisa diubah admin)
+        const tokoLat = parseFloat(settings.toko_lat || '-6.8402');
+        const tokoLon = parseFloat(settings.toko_lon || '106.7725');
+        const tarifPerKm = parseInt(settings.tarif_per_km || '5000');
+
+        // Validasi koordinat
+        if (isNaN(tokoLat) || isNaN(tokoLon)) {
+          if (infoJarak) {
+            infoJarak.innerHTML = '❌ Koordinat toko belum diatur. Hubungi admin.';
+            infoJarak.style.color = 'red';
+          }
+          return;
+        }
+
+        // Cek apakah browser support geolocation
+        if (!navigator.geolocation) {
+          if (infoJarak) {
+            infoJarak.innerHTML = '❌ Browser kamu tidak mendukung GPS.';
+            infoJarak.style.color = 'red';
+          }
+          return;
+        }
+
+        // Update tampilan tombol saat loading
+        if (btnCek) {
+          btnCek.textContent = '⏳ Mendeteksi lokasi...';
+          btnCek.disabled = true;
+        }
+        if (infoJarak) {
+          infoJarak.innerHTML = 'Sedang mendeteksi lokasi kamu...';
+          infoJarak.style.color = '#666';
+        }
+
+        // Minta izin & ambil lokasi
+        navigator.geolocation.getCurrentPosition(
+          function (position) {
+            const userLat = position.coords.latitude;
+            const userLon = position.coords.longitude;
+
+            // Hitung jarak pakai Haversine
+            const jarak = hitungJarakKm(tokoLat, tokoLon, userLat, userLon);
+            jarakOtomatis = jarak;
+
+            // Hitung ongkir (minimal Rp 5.000, dibulatkan per km)
+            const ongkir = Math.max(5000, Math.ceil(jarak) * tarifPerKm);
+            ongkirOtomatis = ongkir;
+
+            // Update tampilan
+            if (infoJarak) {
+              infoJarak.innerHTML = `📍 Jarak kamu ke toko: <strong>${jarak.toFixed(1)} km</strong>`;
+              infoJarak.style.color = '#333';
+            }
+            if (tampilOngkir) {
+              tampilOngkir.innerText = `Rp ${fmt(ongkir)}`;
+            }
+            if (btnCek) {
+              btnCek.textContent = '🔄 Deteksi Ulang';
+              btnCek.disabled = false;
+            }
+          },
+          function (error) {
+            let pesanError = '❌ Gagal mendapatkan lokasi.';
+            if (error.code === 1) pesanError = '❌ Izin GPS ditolak. Mohon izinkan akses lokasi di browser.';
+            else if (error.code === 2) pesanError = '❌ Lokasi tidak tersedia. Coba nyalakan GPS.';
+            else if (error.code === 3) pesanError = '❌ Timeout. Coba klik tombol lagi.';
+            if (infoJarak) {
+              infoJarak.innerHTML = pesanError;
+              infoJarak.style.color = 'red';
+            }
+            if (btnCek) {
+              btnCek.textContent = 'Deteksi Jarak & Hitung Ongkir';
+              btnCek.disabled = false;
+            }
+          },
+          { timeout: 10000, enableHighAccuracy: true }
+        );
+      }
     </script>
   </body>
 </html>
