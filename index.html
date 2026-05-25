@@ -2635,11 +2635,14 @@
     </div>
       <div class="form-group" style="margin-top: 10px;">
         <label class="form-label">📅 Hari & Tanggal Pengambilan:</label>
-        <input type="date" id="pickup-date" class="form-input" required>
+        <input type="date" id="pickup-date" class="form-input" onchange="updateJamPickup()">
       </div>
       <div class="form-group" style="margin-top: 10px;">
         <label class="form-label">⏰ Jam Pengambilan (WIB):</label>
-        <input type="time" id="pickup-time" class="form-input" required>
+        <select id="pickup-time" class="form-input form-select">
+          <option value="">-- Pilih tanggal dulu --</option>
+        </select>
+        <p id="info-jam" style="font-size:11px;color:#888;margin-top:6px;line-height:1.4"></p>
       </div>
       <div class="form-group"><label class="form-label">Catatan (opsional)</label><textarea id="co-notes" class="form-input" rows="2" placeholder="Tidak pedas, extra saus, dll."></textarea></div>
     </div></div>
@@ -2699,6 +2702,72 @@
           }
           const btnCek = document.getElementById('btn-cek-ongkir');
           if (btnCek) { btnCek.textContent = 'Deteksi Jarak & Hitung Ongkir'; btnCek.disabled = false; }
+        }
+      }
+
+      // ⏰ Update dropdown jam pickup berdasarkan tanggal yang dipilih
+      // Aturan: buffer 60 menit untuk persiapan, jam operasional 09:00-20:00
+      function updateJamPickup() {
+        const dateInput = document.getElementById('pickup-date');
+        const timeSelect = document.getElementById('pickup-time');
+        const infoJam = document.getElementById('info-jam');
+        if (!dateInput || !timeSelect) return;
+
+        const rawDate = dateInput.value;
+        timeSelect.innerHTML = '';
+        if (infoJam) infoJam.textContent = '';
+
+        if (!rawDate) {
+          timeSelect.innerHTML = '<option value="">-- Pilih tanggal dulu --</option>';
+          return;
+        }
+
+        // Bandingkan tanggal pilihan dengan tanggal hari ini
+        const today = new Date();
+        const todayStr = today.getFullYear() + '-' +
+          String(today.getMonth() + 1).padStart(2, '0') + '-' +
+          String(today.getDate()).padStart(2, '0');
+        const isHariIni = rawDate === todayStr;
+
+        // Jam minimum yang boleh dipilih (dalam menit dari 00:00)
+        let minMenit = 9 * 60; // default jam 09:00
+        if (isHariIni) {
+          // Hari ini: jam sekarang + buffer 60 menit
+          const sekarangMenit = today.getHours() * 60 + today.getMinutes() + 60;
+          minMenit = Math.max(minMenit, sekarangMenit);
+          // Bulatkan ke atas ke 30 menit terdekat
+          if (minMenit % 30 !== 0) minMenit = Math.ceil(minMenit / 30) * 30;
+        }
+
+        // Generate semua slot 09:00 sampai 20:00 (interval 30 menit)
+        const slots = [];
+        for (let menit = 9 * 60; menit <= 20 * 60; menit += 30) {
+          if (menit >= minMenit) {
+            const jam = String(Math.floor(menit / 60)).padStart(2, '0');
+            const mnt = String(menit % 60).padStart(2, '0');
+            slots.push(`${jam}:${mnt}`);
+          }
+        }
+
+        if (slots.length === 0) {
+          // Sudah lewat jam operasional hari ini
+          timeSelect.innerHTML = '<option value="">-- Tidak ada jam tersedia --</option>';
+          timeSelect.disabled = true;
+          if (infoJam) {
+            infoJam.innerHTML = '⚠️ Jam pickup hari ini sudah tutup. Silakan pilih tanggal besok.';
+            infoJam.style.color = '#d35400';
+          }
+          return;
+        }
+
+        timeSelect.disabled = false;
+        let opt = '<option value="">-- Pilih Jam --</option>';
+        slots.forEach(t => { opt += `<option value="${t}">${t} WIB</option>`; });
+        timeSelect.innerHTML = opt;
+
+        if (isHariIni && infoJam) {
+          infoJam.innerHTML = '💡 Minimal 60 menit dari sekarang untuk persiapan.';
+          infoJam.style.color = '#888';
         }
       }
 
