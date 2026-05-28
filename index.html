@@ -2913,19 +2913,25 @@
         // Gabungkan seluruh baris pesan
         const msg = msgLines.join('\n');
 
-        const cleanWA = (settings.wa_number || '81234567890').replace(
-          /^0|^62/,
-          ''
-        );
-        window.open(
-          `https://wa.me/62${cleanWA}?text=${encodeURIComponent(msg)}`,
-          '_blank',
-          'noopener,noreferrer'
-        );
+        // Bersihkan nomor WA: hapus semua karakter non-digit dulu (+, spasi, strip, dll)
+        let nomorWA = (settings.wa_number || '81234567890').replace(/\D/g, '');
+        // Normalisasi prefix ke format 62
+        if (nomorWA.startsWith('0')) {
+          nomorWA = '62' + nomorWA.slice(1);
+        } else if (!nomorWA.startsWith('62')) {
+          nomorWA = '62' + nomorWA;
+        }
+
+        const waUrl = `https://wa.me/${nomorWA}?text=${encodeURIComponent(msg)}`;
+
+        // Bersihkan keranjang & tutup sheet sebelum pindah halaman
         cart = {};
         closeSheet('checkout-sheet', 'backdrop');
         renderCatalog(document.getElementById('search-input').value);
         updateCartBar();
+
+        // Pindah ke WhatsApp pakai location.href (kompatibel in-app browser Instagram/FB)
+        window.location.href = waUrl;
       }
 
       /* ═══════════════════════════════════════════════════
