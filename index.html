@@ -2147,6 +2147,12 @@
         bank1_name: '', bank1_number: '', bank1_owner: '',
         bank2_name: '', bank2_number: '', bank2_owner: '',
         bank3_name: '', bank3_number: '', bank3_owner: '',
+        toko_buka: 'true',
+        toko_tutup_msg: 'Maaf, toko online sedang tidak bisa melayani pesanan. Silakan datang langsung ke outlet.',
+        pickup_aktif: 'true',
+        delivery_aktif: 'true',
+        ojol_aktif: 'true',
+        max_jarak_km: '15',
       };
       let categories = [];
       let products = [];
@@ -2578,6 +2584,19 @@
         const ids = Object.keys(cart).filter((k) => cart[k] > 0);
         if (!ids.length) return;
 
+        // 🔒 Cek apakah toko sedang buka
+        if (settings.toko_buka === 'false') {
+          const msg = settings.toko_tutup_msg || 'Maaf, toko online sedang tidak bisa melayani pesanan. Silakan datang langsung ke outlet.';
+          document.getElementById('sheet-body').innerHTML = `
+            <div style="text-align:center;padding:30px 16px">
+              <div style="font-size:48px;margin-bottom:12px">🔒</div>
+              <p style="font-size:18px;font-weight:800;color:var(--dark);margin-bottom:10px">Toko Sedang Tutup</p>
+              <div class="info-box" style="background:#fff8e1;border-color:#ffe082;color:#7c5c00;text-align:left;line-height:1.6">${esc(msg)}</div>
+            </div>`;
+          openSheet('checkout-sheet', 'backdrop');
+          return;
+        }
+
         // Hitung total item & subtotal untuk cek minimal order delivery
         const totalItems = Object.values(cart).reduce((s, v) => s + v, 0);
         const totalAmount = sub();
@@ -2596,8 +2615,17 @@
     </div>`;
           }).join('');
 
-        // Buat opsi metode pengambilan - disable delivery jika tidak memenuhi syarat
+        // Cek status aktif tiap metode dari setting owner
+        const aktifMap = {
+          pickup: settings.pickup_aktif !== 'false',
+          ojol: settings.ojol_aktif !== 'false',
+          delivery: settings.delivery_aktif !== 'false',
+        };
+
+        // Buat opsi metode pengambilan - filter sesuai toggle owner & syarat minimal
         const methodOptions = DELIVERY_METHODS.map((d) => {
+          // Jika metode dimatikan owner, jangan tampilkan
+          if (!aktifMap[d.v]) return '';
           if (d.v === 'delivery' && !deliveryOk) {
             return `<option value="${d.v}" disabled>${d.l} (Min. Rp ${fmt(minAmount)} atau ${minItems} item)</option>`;
           }
@@ -2607,7 +2635,7 @@
         document.getElementById('sheet-body').innerHTML = `
     <div><p class="sec-label">Detail Pesanan</p><div class="order-card">${rows}</div>
     <div class="subtotal-row"><span class="subtotal-label">Subtotal</span><span class="subtotal-val" id="co-sub">Rp ${fmt(sub())}</span></div></div>
-    ${!deliveryOk ? `<div class="info-box" style="margin:0 0 4px;background:#fff8e1;border-color:#ffe082;color:#7c5c00">
+    ${!deliveryOk && aktifMap.delivery ? `<div class="info-box" style="margin:0 0 4px;background:#fff8e1;border-color:#ffe082;color:#7c5c00">
       ⚠️ <b>Delivery</b> tersedia jika subtotal ≥ Rp ${fmt(minAmount)} atau minimal ${minItems} item.
     </div>` : ''}
     <div><p class="sec-label">Data Pemesan</p><div class="form-section">
@@ -3098,7 +3126,45 @@
         ).textContent = `${products.length} produk · ${categories.length} kategori`;
         const body = document.getElementById('admin-body');
 
-        const settingsHTML = `<div class="admin-section"><p class="admin-section-title"><span>🏪</span> Pengaturan Toko</p>
+        const settingsHTML = `<div class="admin-section"><p class="admin-section-title"><span>🔧</span> Kontrol Toko</p>
+    <div class="form-section">
+      <div style="background:#f8f4ee;border-radius:12px;padding:14px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <p style="font-size:14px;font-weight:700;color:var(--dark)">🏪 Status Toko Online</p>
+            <p style="font-size:11px;color:#aaa;margin-top:2px" id="lbl-toko-buka">${settings.toko_buka === 'false' ? '🔴 Sedang TUTUP' : '🟢 Sedang BUKA'}</p>
+          </div>
+          <label class="toggle-wrap"><input type="checkbox" id="st-toko-buka" ${settings.toko_buka !== 'false' ? 'checked' : ''} onchange="document.getElementById('lbl-toko-buka').textContent = this.checked ? '🟢 Sedang BUKA' : '🔴 Sedang TUTUP'"><span class="toggle-slider"></span></label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Pesan Saat Toko Tutup</label>
+        <textarea id="st-tutup-msg" class="form-input" rows="3" placeholder="Maaf, toko online sedang tidak bisa melayani pesanan...">${esc(settings.toko_tutup_msg || '')}</textarea>
+        <p style="font-size:10px;color:#aaa;margin-top:4px">Pesan ini muncul ke customer saat mencoba checkout ketika toko tutup.</p>
+      </div>
+      <p class="admin-section-title" style="font-size:12px;margin-top:16px;margin-bottom:8px">🚚 Aktifkan Metode Pengambilan</p>
+      <div style="background:#f8f4ee;border-radius:12px;padding:12px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <span style="font-size:13px;font-weight:600">🏃 Ambil Sendiri (Pickup)</span>
+          <label class="toggle-wrap"><input type="checkbox" id="st-pickup-aktif" ${settings.pickup_aktif !== 'false' ? 'checked' : ''}><span class="toggle-slider"></span></label>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <span style="font-size:13px;font-weight:600">🛵 Kurir Sendiri (Ojol)</span>
+          <label class="toggle-wrap"><input type="checkbox" id="st-ojol-aktif" ${settings.ojol_aktif !== 'false' ? 'checked' : ''}><span class="toggle-slider"></span></label>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:13px;font-weight:600">📦 Delivery (Diantar Admin)</span>
+          <label class="toggle-wrap"><input type="checkbox" id="st-delivery-aktif" ${settings.delivery_aktif !== 'false' ? 'checked' : ''}><span class="toggle-slider"></span></label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Batas Maksimal Jarak Delivery (km)</label>
+        <input id="st-max-jarak" class="form-input" type="number" value="${esc(settings.max_jarak_km || '15')}" placeholder="15">
+        <p style="font-size:10px;color:#aaa;margin-top:4px">Jika jarak customer melebihi ini, delivery otomatis tidak tersedia.</p>
+      </div>
+    </div>
+  </div>
+  <div class="admin-section"><p class="admin-section-title"><span>🏪</span> Pengaturan Toko</p>
     <div class="form-section">
       <div class="form-group"><label class="form-label">Logo Toko</label>${imgZoneHTML(
         'st-img',
@@ -3323,6 +3389,13 @@
         settings.min_order_amount = minAmount || '50000';
         settings.min_order_items = minItems || '2';
         settings.qris_max_amount = qrisMax || '300000';
+        // Kontrol toko
+        settings.toko_buka = document.getElementById('st-toko-buka')?.checked ? 'true' : 'false';
+        settings.toko_tutup_msg = (document.getElementById('st-tutup-msg')?.value || '').trim() || 'Maaf, toko online sedang tidak bisa melayani pesanan. Silakan datang langsung ke outlet.';
+        settings.pickup_aktif = document.getElementById('st-pickup-aktif')?.checked ? 'true' : 'false';
+        settings.ojol_aktif = document.getElementById('st-ojol-aktif')?.checked ? 'true' : 'false';
+        settings.delivery_aktif = document.getElementById('st-delivery-aktif')?.checked ? 'true' : 'false';
+        settings.max_jarak_km = (document.getElementById('st-max-jarak')?.value || '').trim() || '15';
         // Rekening bank 1-3
         for (let i = 1; i <= 3; i++) {
           settings[`bank${i}_name`]   = (document.getElementById(`st-bank${i}-name`)?.value || '').trim();
@@ -3862,6 +3935,23 @@
             // Hitung jarak pakai Haversine
             const jarak = hitungJarakKm(tokoLat, tokoLon, userLat, userLon);
             jarakOtomatis = jarak;
+
+            // Cek batas jarak maksimal delivery
+            const maxJarak = parseFloat(settings.max_jarak_km || '15');
+            if (jarak > maxJarak) {
+              ongkirOtomatis = 0;
+              jarakOtomatis = 0;
+              if (infoJarak) {
+                infoJarak.innerHTML = `❌ Jarak Anda dan toko terlalu jauh (${jarak.toFixed(1)} km). Maksimal ${maxJarak} km untuk delivery.`;
+                infoJarak.style.color = 'red';
+              }
+              if (tampilOngkir) tampilOngkir.innerText = 'Rp 0';
+              if (btnCek) {
+                btnCek.textContent = '🔄 Deteksi Ulang';
+                btnCek.disabled = false;
+              }
+              return;
+            }
 
             // Hitung ongkir (minimal Rp 5.000, dibulatkan per km)
             const ongkir = Math.max(5000, Math.ceil(jarak) * tarifPerKm);
